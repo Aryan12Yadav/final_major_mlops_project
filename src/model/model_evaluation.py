@@ -15,15 +15,13 @@ from src.logger import logging
 # Set up DagsHub credentials for MLflow tracking
 dagshub_token = os.getenv("CAPSTONE_TEST")
 if not dagshub_token:
-    raise EnvironmentError("CAPSTONE_TEST environment variable is not set ")
+    raise EnvironmentError("CAPSTONE_TEST environment variable is not set")
 
 os.environ["MLFLOW_TRACKING_USERNAME"] = "aryanyadav892408"
 os.environ["MLFLOW_TRACKING_PASSWORD"] = dagshub_token
+os.environ["MLFLOW_TRACKING_URI"] = "https://dagshub.com/aryanyadav892408/final_major_mlops_project.mlflow"
 
-
-#  Correct DagsHub MLflow URI setup
-dagshub.init(repo_owner="aryanyadav892408", repo_name="final_major_mlops_project", mlflow=True)
-mlflow.set_tracking_uri("https://dagshub.com/aryanyadav892408/final_major_mlops_project.mlflow")
+mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
 
 # Below code block is for local use
 # ---------------------------------------------------------------------
