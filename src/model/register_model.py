@@ -15,24 +15,24 @@ warnings.filterwarnings('ignore')
 # Below code block is for production use
 # -----------------------------------------------------------------------
 # Set up Dagshub credentials for MLflwo tracking
-# dagshub_token = os.getenv("CAPSTONE_TEST")
-# if not dagshub_token:
-#     raise EnvironmentError("CAPSTONE_TEST environment variable is not set")
+dagshub_token = os.getenv("CAPSTONE_TEST")
+if not dagshub_token:
+    raise EnvironmentError("CAPSTONE_TEST environment variable is not set")
 
-# os.environ['MLFLOW_TRACKING_USERNAME'] = dagshub_token
-# os.environ['MLFLOW_TRACKING_PASSWORD'] = dagshub_token
+os.environ['MLFLOW_TRACKING_USERNAME'] = dagshub_token
+os.environ['MLFLOW_TRACKING_PASSWORD'] = dagshub_token
 
-# dagshub_url = "https://dagshub.com"
-# repo_owner = "aryanyadav892408"
-# repo_name = "final_major_mlops_project"
-# # Set up MLflow tracking url
-# mlflow.set_tracking_uri(f"{dagshub_url}/{repo_owner}/{repo_name}.mlflow")
-# # ------------------------------------------------------------------------------------
+dagshub_url = "https://dagshub.com"
+repo_owner = "aryanyadav892408"
+repo_name = "final_major_mlops_project"
+# Set up MLflow tracking url
+mlflow.set_tracking_uri(f"{dagshub_url}/{repo_owner}/{repo_name}.mlflow")
+# ------------------------------------------------------------------------------------
 
 # Below code block is for local use
 # ----------------------------------------------------------------
-mlflow.set_tracking_uri("https://dagshub.com/aryanyadav892408/final_major_mlops_project.mlflow")
-dagshub.init(repo_owner="aryanyadav892408",repo_name= "final_major_mlops_project",mlflow = True)
+# mlflow.set_tracking_uri("https://dagshub.com/aryanyadav892408/final_major_mlops_project.mlflow")
+# dagshub.init(repo_owner="aryanyadav892408",repo_name= "final_major_mlops_project",mlflow = True)
 # -------------------------------------------------------------
 
 def load_model_info(file_path:str) -> dict:
