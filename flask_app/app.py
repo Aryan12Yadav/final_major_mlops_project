@@ -10,43 +10,33 @@ from nltk.stem import WordNetLemmatizer
 from nltk.corpus import stopwords
 import string
 import re
-import dagshub
 import warnings
 
-warnings.simplefilter('ignore', UserWarning)
-warnings.filterwarnings('ignore')
+warnings.simplefilter("ignore", UserWarning)
+warnings.filterwarnings("ignore")
 
-# ============================================================
-# 🧹 TEXT PREPROCESSING FUNCTIONS
-# ============================================================
+# ---------------- Text preprocessing ---------------- #
 def lemmatization(text):
     lemmatizer = WordNetLemmatizer()
-    text = text.split()
-    text = [lemmatizer.lemmatize(word) for word in text]
-    return " ".join(text)
+    return " ".join([lemmatizer.lemmatize(w) for w in text.split()])
 
 def remove_stop_words(text):
     stop_words = set(stopwords.words("english"))
-    text = [word for word in str(text).split() if word not in stop_words]
-    return " ".join(text)
+    return " ".join([w for w in text.split() if w not in stop_words])
 
 def removing_numbers(text):
-    return ''.join([char for char in text if not char.isdigit()])
+    return ''.join([c for c in text if not c.isdigit()])
 
 def lower_case(text):
-    text = text.split()
-    text = [word.lower() for word in text]
-    return " ".join(text)
+    return " ".join([w.lower() for w in text.split()])
 
 def removing_punctuations(text):
-    text = re.sub('[%s]' % re.escape(string.punctuation), " ", text)
+    text = re.sub('[%s]' % re.escape(string.punctuation), ' ', text)
     text = text.replace('؛', "")
-    text = re.sub('/s+', ' ', text).strip()
-    return text
+    return re.sub('\s+', ' ', text).strip()
 
 def removing_urls(text):
-    url_pattern = re.compile(r"https?://\S+|www\.\S+")
-    return url_pattern.sub(r'', text)
+    return re.sub(r'https?://\S+|www\.\S+', '', text)
 
 def normalize_text(text):
     text = lower_case(text)
@@ -57,98 +47,61 @@ def normalize_text(text):
     text = lemmatization(text)
     return text
 
-# ============================================================
-# ⚙️ MLflow / Dagshub Setup (Safe Mode)
-# ============================================================
+# ---------------- MLflow / Dagshub setup ---------------- #
+dagshub_token = os.getenv("CAPSTONE_TEST")
+if not dagshub_token and os.getenv("CI") != "true":
+    raise EnvironmentError("CAPSTONE_TEST environment variable is not set")
+
+if dagshub_token:
+    os.environ["MLFLOW_TRACKING_USERNAME"] = dagshub_token
+    os.environ["MLFLOW_TRACKING_PASSWORD"] = dagshub_token
+
+dagshub_url = "https://dagshub.com"
+repo_owner = 'aryanyadav892408'
+repo_name = 'final_major_mlops_project'
+mlflow.set_tracking_uri(f'{dagshub_url}/{repo_owner}/{repo_name}.mlflow')
+
+# ---------------- Flask app ---------------- #
 app = Flask(__name__)
+registry = CollectorRegistry()
 
-IS_CI = os.environ.get("CI", "false").lower() == "true"
-model = None
-vectorizer = None
+REQUEST_COUNT = Counter(
+    "app_request_count", "Total number of requests", ["method", "endpoint"], registry=registry
+)
+REQUEST_LATENCY = Histogram(
+    "app_request_latency_seconds", "Request latency in seconds", ["endpoint"], registry=registry
+)
+PREDICTION_COUNT = Counter(
+    "model_prediction_count", "Count of predictions", ["prediction"], registry=registry
+)
 
-if IS_CI:
-    # ------------------------------------------
-    # CI/CD Mode — No Dagshub Required
-    # ------------------------------------------
-    print("Running in CI/CD Mode: Using Dummy Model")
+# ---------------- Load model & vectorizer ---------------- #
+model_name = "my_model"
 
+def get_latest_model_version(model_name):
+    client = mlflow.MlflowClient()
+    latest_version = client.get_latest_versions(model_name, stages=["Production"])
+    if not latest_version:
+        latest_version = client.get_latest_versions(model_name, stages=["Staging"])
+    if not latest_version:
+        raise RuntimeError(f"No model versions found for '{model_name}'")
+    return latest_version[0].version
+
+if os.getenv("CI") == "true":
+    # Dummy model for CI/CD tests
     class DummyModel:
         def predict(self, X):
-            text = X.iloc[0, 0] if isinstance(X, pd.DataFrame) else X[0]
-            return ["Positive" if "love" in text.lower() else "Negative"]
-
-    class DummyVectorizer:
-        def transform(self, texts):
-            return pd.DataFrame([[len(text) for text in texts]], columns=["len"])
-
+            return ["Positive"] * len(X)
     model = DummyModel()
-    vectorizer = DummyVectorizer()
-
+    vectorizer = pickle.loads(pickle.dumps({"dummy": True}))
 else:
-    # ------------------------------------------
-    # 🌐 Production Mode — Use Dagshub + MLflow
-    # ------------------------------------------
-    dagshub_token = os.getenv('CAPSTONE_TEST')
-    if not dagshub_token:
-        print("⚠️ CAPSTONE_TEST not set. Falling back to local model.pkl")
-    else:
-        os.environ['MLFLOW_TRACKING_USERNAME'] = dagshub_token
-        os.environ['MLFLOW_TRACKING_PASSWORD'] = dagshub_token
-
-    dagshub_url = 'https://dagshub.com/aryanyadav892408/final_major_mlops_project.mlflow'
-    mlflow.set_tracking_uri(dagshub_url)
-
-    model_name = "my_model"
-
-    def get_latest_model_version(model_name):
-        client = mlflow.MlflowClient()
-        try:
-            latest_version = client.get_latest_versions(model_name, stages=["Production"])
-            if not latest_version:
-                latest_version = client.get_latest_versions(model_name, stages=["None"])
-            return latest_version[0].version if latest_version else None
-        except Exception as e:
-            print(f"⚠️ MLflow connection failed: {e}")
-            return None
-
     model_version = get_latest_model_version(model_name)
+    model_uri = f'models:/{model_name}/{model_version}'
+    print(f"Fetching model from: {model_uri}")
+    model = mlflow.pyfunc.load_model(model_uri)
+    vectorizer = pickle.load(open('models/vectorizer.pkl', 'rb'))
 
-    try:
-        if model_version:
-            model_uri = f'models:/{model_name}/{model_version}'
-            print(f"Fetching model from: {model_uri}")
-            model = mlflow.pyfunc.load_model(model_uri)
-        else:
-            print("⚠️ Using local fallback model.pkl")
-            with open('models/model.pkl', 'rb') as f:
-                model = pickle.load(f)
-    except Exception as e:
-        print(f"⚠️ Model load failed: {e}")
-        class DummyModel:
-            def predict(self, X):
-                return ["Positive"]
-        model = DummyModel()
-
-    try:
-        vectorizer = pickle.load(open('models/vectorizer.pkl', 'rb'))
-    except Exception as e:
-        print(f"⚠️ Vectorizer load failed: {e}")
-        class DummyVectorizer:
-            def transform(self, texts):
-                return pd.DataFrame([[len(text) for text in texts]], columns=["len"])
-        vectorizer = DummyVectorizer()
-
-# ============================================================
-# 📊 PROMETHEUS METRICS
-# ============================================================
-registry = CollectorRegistry()
-REQUEST_COUNT = Counter("app_request_count", "Total number of requests", ["method", "endpoint"], registry=registry)
-REQUEST_LATENCY = Histogram("app_request_latency_seconds", "Latency of requests in seconds", ["endpoint"], registry=registry)
-PREDICTION_COUNT = Counter("model_prediction_count", "Count of predictions for each class", ["prediction"], registry=registry)
-
-# ============================================================
-# 🌐 ROUTES
-# ============================================================
+# ---------------- Routes ---------------- #
 @app.route("/")
 def home():
     REQUEST_COUNT.labels(method="GET", endpoint="/").inc()
@@ -161,33 +114,22 @@ def home():
 def predict():
     REQUEST_COUNT.labels(method="POST", endpoint="/predict").inc()
     start_time = time.time()
+    text = normalize_text(request.form["text"])
 
-    text = request.form["text"]
-    text = normalize_text(text)
-
-    try:
+    if os.getenv("CI") == "true":
+        prediction = model.predict([text])[0]
+    else:
         features = vectorizer.transform([text])
-        if not isinstance(features, pd.DataFrame):
-            features_df = pd.DataFrame(features)
-        else:
-            features_df = features
-        result = model.predict(features_df)
-        prediction = result[0]
-    except Exception as e:
-        print(f"⚠️ Prediction error: {e}")
-        prediction = "Error"
+        features_df = pd.DataFrame(features.toarray(), columns=[str(i) for i in range(features.shape[1])])
+        prediction = model.predict(features_df)[0]
 
     PREDICTION_COUNT.labels(prediction=str(prediction)).inc()
     REQUEST_LATENCY.labels(endpoint="/predict").observe(time.time() - start_time)
-
     return render_template("index.html", result=prediction)
 
 @app.route("/metrics", methods=["GET"])
 def metrics():
     return generate_latest(registry), 200, {"Content-Type": CONTENT_TYPE_LATEST}
 
-# ============================================================
-# 🚀 ENTRY POINT
-# ============================================================
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)
