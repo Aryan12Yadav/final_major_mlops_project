@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request
 import mlflow
 import pickle
+import dagshub
 import os
 import pandas as pd
 import numpy as np
@@ -46,6 +47,15 @@ def normalize_text(text):
     text = removing_urls(text)
     text = lemmatization(text)
     return text
+
+
+
+# # Below code block is for local use
+# # -------------------------------------------------------------------------------------
+# mlflow.set_tracking_uri('https://dagshub.com/aryanyadav892408/final_major_mlops_project.mlflow')
+# dagshub.init(repo_owner='aryanyadav892408', repo_name='final_major_mlops_project'   , mlflow=True)
+# # -------------------------------------------------------------------------------------
+
 
 # ---------------- MLflow / Dagshub setup ---------------- #
 dagshub_token = os.getenv("CAPSTONE_TEST")

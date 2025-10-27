@@ -60,10 +60,15 @@
 34. Add dockerfile and start docker-desktop in background
     Also before proceeding make sure: [switch the mlflow server setup to param version, change cmd on dockerfile]
 35. go to root dir and: "docker build -t capstone-app:latest ."
-36. Try running the image: "docker run -p 8888:5000 capstone-app:latest"
+36. Try running the image: "docker run -p 8888:5000 capstone-app:latest ."
     - This run will give 'OSError: capstone_test environment variable is not set'...obviously
-    - alternate: docker run -p 8888:5000 -e CAPSTONE_TEST=54b1d67648a9b1267ef906fsdfsd8b292f779f0 capstone-app:latest
+    - alternate: docker run -p 8888:5000 -e CAPSTONE_TEST=5a89d6fabadeba673aeae6d46674a88aba84e273 capstone-app:latest
     - docker push youruser/capstone-app:latest (optional)
+    or 
+    -        docker run -p 8888:5000 \
+            -e CAPSTONE_TEST=5a89d6fabadeba673aeae6d46674a88aba84e273 \
+            capstone-app:latest
+            
     - optional: try to delete image locally and pull it from dockerhub and run (optional)
 
 37. Setup aws services for below secrets and variables:
